@@ -31,224 +31,223 @@
 package actions
 
 import (
-  "os"
-  "fmt"
-  "time"
-  "regexp"
-  "strconv"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
-  "encoding/json"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"time"
 
-  "github.com/spf13/cobra"
-  "github.com/nderjung/concourse-github-pr-comment-resource/api"
+	"github.com/nderjung/concourse-github-pr-comment-resource/api"
+	"github.com/spf13/cobra"
 )
 
 // InCmd
 var InCmd = &cobra.Command{
-  Use:                   "in [OPTIONS] PATH",
-  Short:                 "Run the input parsing step",
-  Run:                   doInCmd,
-  Args:                  cobra.ExactArgs(1),
-  DisableFlagsInUseLine: true,
+	Use:                   "in [OPTIONS] PATH",
+	Short:                 "Run the input parsing step",
+	Run:                   doInCmd,
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
 }
 
 // InParams are the parameters for configuring the input
 type InParams struct {
-  CommentFile string `json:"comment_file"`
+	CommentFile string `json:"comment_file"`
 }
 
 // InRequest from the check stdin.
 type InRequest struct {
-  Source  Source   `json:"source"`
-  Version Version  `json:"version"`
-  Params  InParams `json:"params"`
+	Source  Source   `json:"source"`
+	Version Version  `json:"version"`
+	Params  InParams `json:"params"`
 }
 
 // InResponse represents the structure Concourse expects on stdout
 type InResponse struct {
-  Version  Version  `json:"version"`
-  Metadata Metadata `json:"metadata"`
+	Version  Version  `json:"version"`
+	Metadata Metadata `json:"metadata"`
 }
 
 type InMetadata struct {
-  PRID              int       `json:"pr_id"`
-  PRHeadRef        string     `json:"pr_head_ref"`
-  PRHeadSHA         string    `json:"pr_head_sha"`
-  PRBaseRef        string     `json:"pr_base_ref"`
-  PRBaseSHA         string    `json:"pr_base_sha"`
-  CommentID         int64     `json:"comment_id"`
-  Body              string    `json:"body"`
-  CreatedAt         time.Time `json:"created_at"`
-  UpdatedAt         time.Time `json:"updated_at"`
-  AuthorAssociation string    `json:"author_association"`
-  HTMLURL           string    `json:"html_url"`
-  UserLogin         string    `json:"user_login"`
-  UserID            int64     `json:"user_id"`
-  UserAvatarURL     string    `json:"user_avatar_url"`
-  UserHTMLURL       string    `json:"user_html_url"`
+	PRID              int       `json:"pr_id"`
+	PRHeadRef         string    `json:"pr_head_ref"`
+	PRHeadSHA         string    `json:"pr_head_sha"`
+	PRBaseRef         string    `json:"pr_base_ref"`
+	PRBaseSHA         string    `json:"pr_base_sha"`
+	CommentID         int64     `json:"comment_id"`
+	Body              string    `json:"body"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorAssociation string    `json:"author_association"`
+	HTMLURL           string    `json:"html_url"`
+	UserLogin         string    `json:"user_login"`
+	UserID            int64     `json:"user_id"`
+	UserAvatarURL     string    `json:"user_avatar_url"`
+	UserHTMLURL       string    `json:"user_html_url"`
 }
 
-
 func doInCmd(cmd *cobra.Command, args []string) {
-  decoder := json.NewDecoder(os.Stdin)
-  decoder.DisallowUnknownFields()
-  
-  // Concourse passes .json on stdin
-  var req InRequest
-  if err := decoder.Decode(&req); err != nil {
-    logger.Fatal(err)
-    return
-  }
-  
-  // Perform the in command with the given request
-  res, err := In(args[0], req)
-  if err != nil {
-    logger.Fatal(err)
-    return
-  }
+	decoder := json.NewDecoder(os.Stdin)
+	decoder.DisallowUnknownFields()
 
-  var encoder = json.NewEncoder(os.Stdout)
+	// Concourse passes .json on stdin
+	var req InRequest
+	if err := decoder.Decode(&req); err != nil {
+		logger.Fatal(err)
+		return
+	}
 
-  // Generate a compatible Concourse output
-  if err := doOutput(res, encoder, logger); err != nil {
-    logger.Fatalf("Failed to encode to stdout: %s", err)
-    return
-  }
+	// Perform the in command with the given request
+	res, err := In(args[0], req)
+	if err != nil {
+		logger.Fatal(err)
+		return
+	}
+
+	var encoder = json.NewEncoder(os.Stdout)
+
+	// Generate a compatible Concourse output
+	if err := doOutput(res, encoder, logger); err != nil {
+		logger.Fatalf("Failed to encode to stdout: %s", err)
+		return
+	}
 }
 
 func In(outputDir string, req InRequest) (*InResponse, error) {
-  client, err := api.NewGithubClient(
-    req.Source.Repository,
-    req.Source.AccessToken,
-    req.Source.SkipSSLVerification,
-    req.Source.GithubEndpoint,
-  )
-  if err != nil {
-    return nil, err
-  }
+	client, err := api.NewGithubClient(
+		req.Source.Repository,
+		req.Source.AccessToken,
+		req.Source.SkipSSLVerification,
+		req.Source.GithubEndpoint,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-  commentID, err := strconv.ParseInt(req.Version.Ref, 10, 64)
-  if err != nil {
-    return nil, err
-  }
-  comment, err := client.GetPullRequestComment(commentID)
-  if err != nil {
-    return nil, err
-  }
+	commentID, err := strconv.ParseInt(req.Version.Ref, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	comment, err := client.GetPullRequestComment(commentID)
+	if err != nil {
+		return nil, err
+	}
 
-  // Write comment, version and metadata for reuse in PUT
-  path := filepath.Join(outputDir)
-  if err := os.MkdirAll(path, os.ModePerm); err != nil {
-    return nil, fmt.Errorf("failed to create output directory: %s", err)
-  }
+	// Write comment, version and metadata for reuse in PUT
+	path := filepath.Join(outputDir)
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create output directory: %s", err)
+	}
 
-  // Set the destination file to save the comment to
-  commentFile := "comment.txt"
-  if req.Params.CommentFile != "" {
-    commentFile = req.Params.CommentFile
-  }
+	// Set the destination file to save the comment to
+	commentFile := "comment.txt"
+	if req.Params.CommentFile != "" {
+		commentFile = req.Params.CommentFile
+	}
 
-  // Write the comment body to the specified path
-  f, err := os.Create(filepath.Join(path, commentFile))
-  if err != nil {
-    return nil, fmt.Errorf("could not create comment file: %s", err)
-  }
+	// Write the comment body to the specified path
+	f, err := os.Create(filepath.Join(path, commentFile))
+	if err != nil {
+		return nil, fmt.Errorf("could not create comment file: %s", err)
+	}
 
-  defer f.Close()
+	defer f.Close()
 
-  err = f.Truncate(0)
-  if err != nil {
-    return nil, err
-  }
+	err = f.Truncate(0)
+	if err != nil {
+		return nil, err
+	}
 
-  _, err = f.WriteString(*comment.Body)
-  if err != nil {
-    return nil, err
-  }
+	_, err = f.WriteString(*comment.Body)
+	if err != nil {
+		return nil, err
+	}
 
-  // Retrieve the PR number from the given URL
-  prNumber, err := api.ParseCommentHTMLURL(*comment.HTMLURL)
-  if err != nil {
-    return nil, err
-  }
+	// Retrieve the PR number from the given URL
+	prNumber, err := api.ParseCommentHTMLURL(*comment.HTMLURL)
+	if err != nil {
+		return nil, err
+	}
 
-  pull, err := client.GetPullRequest(prNumber)
-  if err != nil {
-    return nil, err
-  }
+	pull, err := client.GetPullRequest(prNumber)
+	if err != nil {
+		return nil, err
+	}
 
-  metadata := serializeMetadata(InMetadata{
-    PRID:               prNumber,
-    PRHeadRef:         *pull.Head.Ref,
-    PRHeadSHA:         *pull.Head.SHA,
-    PRBaseRef:         *pull.Base.Ref,
-    PRBaseSHA:         *pull.Base.SHA,
-    CommentID:         *comment.ID,
-    Body:              *comment.Body,
-    CreatedAt:         *comment.CreatedAt,
-    UpdatedAt:         *comment.UpdatedAt,
-    AuthorAssociation: *comment.AuthorAssociation,
-    HTMLURL:           *comment.HTMLURL,
-    UserLogin:         *comment.User.Login,
-    UserID:            *comment.User.ID,
-    UserAvatarURL:     *comment.User.AvatarURL,
-    UserHTMLURL:       *comment.User.HTMLURL,
-  })
+	metadata := serializeMetadata(InMetadata{
+		PRID:              prNumber,
+		PRHeadRef:         *pull.Head.Ref,
+		PRHeadSHA:         *pull.Head.SHA,
+		PRBaseRef:         *pull.Base.Ref,
+		PRBaseSHA:         *pull.Base.SHA,
+		CommentID:         *comment.ID,
+		Body:              *comment.Body,
+		CreatedAt:         *comment.CreatedAt,
+		UpdatedAt:         *comment.UpdatedAt,
+		AuthorAssociation: *comment.AuthorAssociation,
+		HTMLURL:           *comment.HTMLURL,
+		UserLogin:         *comment.User.Login,
+		UserID:            *comment.User.ID,
+		UserAvatarURL:     *comment.User.AvatarURL,
+		UserHTMLURL:       *comment.User.HTMLURL,
+	})
 
-  if req.Source.MapCommentMeta {
-    for _, commentStr := range req.Source.Comments {
-      extraMeta := getParams(commentStr, *comment.Body)
+	if req.Source.MapCommentMeta {
+		for _, commentStr := range req.Source.Comments {
+			extraMeta := getParams(commentStr, *comment.Body)
 
-      for k, v := range extraMeta {
-        metadata.Add(k, v)
-      }
-    }
-  }
+			for k, v := range extraMeta {
+				metadata.Add(k, v)
+			}
+		}
+	}
 
-  b, err := json.Marshal(req.Version)
+	b, err := json.Marshal(req.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal version: %s", err)
-  }
+	}
 
 	if err := ioutil.WriteFile(filepath.Join(path, "version.json"), b, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write version: %s", err)
-  }
+	}
 
 	b, err = json.Marshal(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal metadata: %s", err)
 	}
 
-  if err := ioutil.WriteFile(filepath.Join(path, "metadata.json"), b, 0644); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(path, "metadata.json"), b, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write metadata: %s", err)
 	}
 
-  // Save the individual metadata items to seperate files
+	// Save the individual metadata items to seperate files
 	for _, d := range metadata {
-    filename := d.Name
+		filename := d.Name
 		content := []byte(d.Value)
 		if err := ioutil.WriteFile(filepath.Join(path, filename), content, 0644); err != nil {
 			return nil, fmt.Errorf("failed to write metadata file %s: %s", filename, err)
 		}
 	}
 
-  return &InResponse{
-    Version:  req.Version,
-    Metadata: metadata,
-  }, nil
+	return &InResponse{
+		Version:  req.Version,
+		Metadata: metadata,
+	}, nil
 }
 
 func getParams(regEx, comment string) (paramsMap map[string]string) {
-  var compRegEx = regexp.MustCompile(regEx)
-  match := compRegEx.FindStringSubmatch(comment)
+	var compRegEx = regexp.MustCompile(regEx)
+	match := compRegEx.FindStringSubmatch(comment)
 
-  paramsMap = make(map[string]string)
-  for i, name := range compRegEx.SubexpNames() {
-    if i > 0 && i <= len(match) {
-      paramsMap[name] = match[i]
-    }
-  }
+	paramsMap = make(map[string]string)
+	for i, name := range compRegEx.SubexpNames() {
+		if i > 0 && i <= len(match) {
+			paramsMap[name] = match[i]
+		}
+	}
 
-  return
+	return
 }

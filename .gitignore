@@ -4,3 +4,5 @@
 // GO
 coverage.out
 dist/
+vendor/
+concourse-github-pr-comment-resource

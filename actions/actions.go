@@ -31,53 +31,53 @@
 package actions
 
 import (
-  "os"
-  "fmt"
-  "log"
-  "regexp"
-  "strings"
-  "reflect"
-  "encoding/json"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"reflect"
+	"regexp"
+	"strings"
 
-  "github.com/google/go-github/v32/github"
+	"github.com/google/go-github/v32/github"
 )
 
 // Source parameters provided by the resource.
 type Source struct {
-  // Meta
-  SkipSSLVerification    bool   `json:"skip_ssl"`
-  GithubEndpoint         string `json:"github_endpoint"`
+	// Meta
+	SkipSSLVerification bool   `json:"skip_ssl"`
+	GithubEndpoint      string `json:"github_endpoint"`
 
-  // The repository to interface with
-  Repository             string `json:"repository"`
+	// The repository to interface with
+	Repository string `json:"repository"`
 
-  // Access methods
-  AccessToken            string `json:"access_token"`
-  Username               string `json:"username"`
-  Password               string `json:"password"`
+	// Access methods
+	AccessToken string `json:"access_token"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
 
-  // Selection criteria
-  OnlyMergeable          bool   `json:"only_mergeable"`
-  States               []string `json:"states"`
-  Labels               []string `json:"labels"`
-  Comments             []string `json:"comments"`
-  CommenterAssociation []string `json:"commenter_association"`
-  MapCommentMeta         bool   `json:"map_comment_meta"`
-  
-  IgnoreStates         []string `json:"ignore_states"`
-  IgnoreLabels         []string `json:"ignore_labels"`
-  IgnoreComments       []string `json:"ignore_comments"`
+	// Selection criteria
+	OnlyMergeable        bool     `json:"only_mergeable"`
+	States               []string `json:"states"`
+	Labels               []string `json:"labels"`
+	Comments             []string `json:"comments"`
+	CommenterAssociation []string `json:"commenter_association"`
+	MapCommentMeta       bool     `json:"map_comment_meta"`
+
+	IgnoreStates   []string `json:"ignore_states"`
+	IgnoreLabels   []string `json:"ignore_labels"`
+	IgnoreComments []string `json:"ignore_comments"`
 }
 
 // Version communicated with Concourse.
 type Version struct {
-  Ref string `json:"ref"`
+	Ref string `json:"ref"`
 }
 
 // Metadata has a key name and value
 type MetadataField struct {
-  Name  string `json:"name"`
-  Value string `json:"value"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // Metadata contains the serialized interface
@@ -85,150 +85,149 @@ type Metadata []*MetadataField
 
 // Add a MetadataField to the Metadata struct
 func (m *Metadata) Add(name, value string) {
-  *m = append(*m, &MetadataField{
-    Name: name,
-    Value: value,
-  })
+	*m = append(*m, &MetadataField{
+		Name:  name,
+		Value: value,
+	})
 }
 
 // Get a MetadataField value from the Metadata struct
 func (m *Metadata) Get(name string) (string, error) {
-  for _, i := range *m {
-    if name == i.Name {
-      return i.Value, nil
-    }
-  }
+	for _, i := range *m {
+		if name == i.Name {
+			return i.Value, nil
+		}
+	}
 
-  return "", fmt.Errorf("metadata index does not exist: %s", name)
+	return "", fmt.Errorf("metadata index does not exist: %s", name)
 }
 
 func serializeMetadata(meta interface{}) Metadata {
-  var res Metadata
-  v := reflect.ValueOf(meta)
-  typeOfS := v.Type()
+	var res Metadata
+	v := reflect.ValueOf(meta)
+	typeOfS := v.Type()
 
-  for i := 0; i< v.NumField(); i++ {
-    res.Add(
-      typeOfS.Field(i).Tag.Get("json"),
-      fmt.Sprintf("%v", v.Field(i).Interface()),
-    )
-  }
+	for i := 0; i < v.NumField(); i++ {
+		res.Add(
+			typeOfS.Field(i).Tag.Get("json"),
+			fmt.Sprintf("%v", v.Field(i).Interface()),
+		)
+	}
 
-  return res
+	return res
 }
 
 // requestsState checks whether the source requests this particular state
 func (source *Source) requestsState(state string) bool {
-  ret := false
+	ret := false
 
-  // if there are no set states, assume only "open" states
-  if len(source.States) == 0 {
-    ret = state == "open"
-  } else {
-    for _, s := range source.States {
-      if s == state {
-        ret = true
-        break
-      }
-    }
-  }
-  
-  // Ensure ignored states
-  for _, s := range source.IgnoreStates {
-    if s == state {
-      ret = false
-      break
-    }
-  }
+	// if there are no set states, assume only "open" states
+	if len(source.States) == 0 {
+		ret = state == "open"
+	} else {
+		for _, s := range source.States {
+			if s == state {
+				ret = true
+				break
+			}
+		}
+	}
 
-  return ret
+	// Ensure ignored states
+	for _, s := range source.IgnoreStates {
+		if s == state {
+			ret = false
+			break
+		}
+	}
+
+	return ret
 }
 
 // requestsLabels checks whether the source requests these set of labels
 func (source *Source) requestsLabels(labels []*github.Label) bool {
-  ret := false
+	ret := false
 
-  // If no set labels, assume all
-  if len(source.Labels) == 0 {
-    ret = true
-  } else {
-    includeLoop:
-    for _, rl := range source.Labels {
-      for _, rr := range labels {
-        if rl == rr.GetName() {
-          ret = true
-          break includeLoop
-        }
-      }
-    }
-  }
+	// If no set labels, assume all
+	if len(source.Labels) == 0 {
+		ret = true
+	} else {
+	includeLoop:
+		for _, rl := range source.Labels {
+			for _, rr := range labels {
+				if rl == rr.GetName() {
+					ret = true
+					break includeLoop
+				}
+			}
+		}
+	}
 
-  excludeLoop:
-  for _, rl := range source.IgnoreLabels {
-    for _, rr := range labels {
-      if rl == rr.GetName() {
-        ret = false
-        break excludeLoop
-      }
-    }
-  }
+excludeLoop:
+	for _, rl := range source.IgnoreLabels {
+		for _, rr := range labels {
+			if rl == rr.GetName() {
+				ret = false
+				break excludeLoop
+			}
+		}
+	}
 
-  return ret
+	return ret
 }
 
 // requestsCommenterAssociation checks the comment author's association
 func (source *Source) requestsCommenterAssociation(assoc string) bool {
-  // if no associations set, assume all
-  if len(source.CommenterAssociation) == 0 || (
-      len(source.CommenterAssociation) == 1 &&
-      source.CommenterAssociation[0] == "all") {
-    return true
-  }
+	// if no associations set, assume all
+	if len(source.CommenterAssociation) == 0 || (len(source.CommenterAssociation) == 1 &&
+		source.CommenterAssociation[0] == "all") {
+		return true
+	}
 
-  assoc = strings.ToLower(assoc)
-  for _, a := range source.CommenterAssociation {
-    if assoc == strings.ToLower(a) {
-      return true
-    }
-  }
+	assoc = strings.ToLower(assoc)
+	for _, a := range source.CommenterAssociation {
+		if assoc == strings.ToLower(a) {
+			return true
+		}
+	}
 
-  return false
+	return false
 }
 
 // requestsCommentRegex determines if the source requests this comment regex
 func (source *Source) requestsCommentRegex(comment string) bool {
-  ret := false
+	ret := false
 
-  if len(source.Comments) == 0 {
-    ret = true
-  } else {
-    for _, c := range source.Comments {
-      matched, _ := regexp.Match(c, []byte(comment))
-      if matched {
-        ret = true
-      }
-    }
-  }
+	if len(source.Comments) == 0 {
+		ret = true
+	} else {
+		for _, c := range source.Comments {
+			matched, _ := regexp.Match(c, []byte(comment))
+			if matched {
+				ret = true
+			}
+		}
+	}
 
-  for _, c := range source.IgnoreComments {
-    matched, _ := regexp.Match(c, []byte(comment))
-    if matched {
-      ret = false
-    }
-  }
+	for _, c := range source.IgnoreComments {
+		matched, _ := regexp.Match(c, []byte(comment))
+		if matched {
+			ret = false
+		}
+	}
 
-  return ret
+	return ret
 }
 
 var logger = log.New(os.Stderr, "resource:", log.Lshortfile)
 
 // doOutput ...
 func doOutput(output interface{}, encoder *json.Encoder, logger *log.Logger) error {
-  _, err := json.MarshalIndent(output, "", "  ")
-  if err != nil {
-    return err
-  }
+	_, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return err
+	}
 
-  // encode output to stdout
-  return encoder.Encode(output)
+	// encode output to stdout
+	return encoder.Encode(output)
 }

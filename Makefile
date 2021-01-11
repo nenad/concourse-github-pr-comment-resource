@@ -31,7 +31,7 @@
 
 # Application configuration
 BIN          ?= github-pr-comment
-ORG          ?= nderjung
+ORG          ?= nenaddev
 REPO         ?= concourse-github-pr-comment-resource
 REGISTRY     ?= docker.io
 GOOS         ?= linux
@@ -75,7 +75,7 @@ endif
 docker: GOLANG_VERSION     ?= 1.15
 docker:
 	$(Q)$(DOCKER) build \
-		--tag ndrjng/$(REPO):$(IMAGE_TAG) \
+		--tag nenaddev/$(REPO):$(IMAGE_TAG) \
 		--file $(WORKDIR)/Dockerfile \
 		--target $(DOCKER_TARGET) \
 		--build-arg BIN=$(BIN) \
@@ -94,7 +94,7 @@ devenv:
 		--name $(BIN)-devenv \
 		--workdir /go/src/github.com/$(ORG)/$(REPO) \
 		--volume $(WORKDIR):/go/src/github.com/$(ORG)/$(REPO) \
-		ndrjng/$(REPO):dev \
+		nenaddev/$(REPO):dev \
 		$(DOCKER_RUN_EXTRA) bash
 
 # CI/CD targets
@@ -142,7 +142,7 @@ ci-release:
 .PHONY: ci-test-production-image
 ci-test-production-image:
 	$(Q)$(DOCKER) run --rm -t \
-		${REGISTRY}/ndrjng/$(REPO):latest \
+		${REGISTRY}/nenaddev/$(REPO):latest \
 			/bin/$(BIN) --version
 
 .PHONY: ci-test-linux-run

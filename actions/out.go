@@ -31,107 +31,107 @@
 package actions
 
 import (
-  "os"
-  "fmt"
-  "strconv"
-  "strings"
-  "io/ioutil"
-  "encoding/json"
-  "path/filepath"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
-  "github.com/spf13/cobra"
-  "github.com/nderjung/concourse-github-pr-comment-resource/api"
+	"github.com/nderjung/concourse-github-pr-comment-resource/api"
+	"github.com/spf13/cobra"
 )
 
 // OutCmd
 var OutCmd = &cobra.Command{
-  Use:                   "out [OPTIONS] PATH",
-  Short:                 "Run the output processing step",
-  Run:                   doOutCmd,
-  Args:                  cobra.ExactArgs(1),
-  DisableFlagsInUseLine: true,
+	Use:                   "out [OPTIONS] PATH",
+	Short:                 "Run the output processing step",
+	Run:                   doOutCmd,
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
 }
 
 type OutParams struct {
-  Path                string `json:"path"`
-  State               string `json:"state"`
-  Comment             string `json:"comment"`
-  CommentFile         string `json:"comment_file"`
-  Labels            []string `json:"labels"`
-  AddLabels         []string `json:"add_labels"`
-  RemoveLabels      []string `json:"remove_labels"`
-  DeleteLastComment   bool   `json:"delete_last_comment"`
+	Path              string   `json:"path"`
+	State             string   `json:"state"`
+	Comment           string   `json:"comment"`
+	CommentFile       string   `json:"comment_file"`
+	Labels            []string `json:"labels"`
+	AddLabels         []string `json:"add_labels"`
+	RemoveLabels      []string `json:"remove_labels"`
+	DeleteLastComment bool     `json:"delete_last_comment"`
 }
 
 func (p *OutParams) Validate() error {
-  if p.State == "" {
-    return nil
-  }
+	if p.State == "" {
+		return nil
+	}
 
-  // Make sure we are setting an allowed state
-  var allowedState bool
+	// Make sure we are setting an allowed state
+	var allowedState bool
 
-  state := strings.ToLower(p.State)
-  allowed := []string{"open", "closed"}
+	state := strings.ToLower(p.State)
+	allowed := []string{"open", "closed"}
 
-  for _, a := range allowed {
-    if state == a {
-      allowedState = true
-    }
-  }
+	for _, a := range allowed {
+		if state == a {
+			allowedState = true
+		}
+	}
 
-  if !allowedState {
-    return fmt.Errorf("unknown state: %s", p.State)
-  }
+	if !allowedState {
+		return fmt.Errorf("unknown state: %s", p.State)
+	}
 
-  return nil
+	return nil
 }
 
 // OutRequest from the check stdin.
 type OutRequest struct {
-  Source Source    `json:"source"`
-  Params OutParams `json:"params"`
+	Source Source    `json:"source"`
+	Params OutParams `json:"params"`
 }
 
 // OutResponse represents the structure Concourse expects on stdout
 type OutResponse struct {
-  Version  Version  `json:"version"`
-  Metadata Metadata `json:"metadata"`
+	Version  Version  `json:"version"`
+	Metadata Metadata `json:"metadata"`
 }
 
 func doOutCmd(cmd *cobra.Command, args []string) {
-  decoder := json.NewDecoder(os.Stdin)
-  decoder.DisallowUnknownFields()
-  
-  // Concourse passes .json on stdin
-  var req OutRequest
-  if err := decoder.Decode(&req); err != nil {
-    logger.Fatalf("Failed to decode to stdin: %s", err)
-    return
-  }
-  
-  // Perform the out command with the given request
-  res, err := Out(args[0], req)
-  if err != nil {
-    logger.Fatal(err)
-    return
-  }
+	decoder := json.NewDecoder(os.Stdin)
+	decoder.DisallowUnknownFields()
 
-  var encoder = json.NewEncoder(os.Stdout)
+	// Concourse passes .json on stdin
+	var req OutRequest
+	if err := decoder.Decode(&req); err != nil {
+		logger.Fatalf("Failed to decode to stdin: %s", err)
+		return
+	}
 
-  // Generate a compatible Concourse output
-  if err := doOutput(res, encoder, logger); err != nil {
-    logger.Fatalf("Failed to encode to stdout: %s", err)
-    return
-  }
+	// Perform the out command with the given request
+	res, err := Out(args[0], req)
+	if err != nil {
+		logger.Fatal(err)
+		return
+	}
+
+	var encoder = json.NewEncoder(os.Stdout)
+
+	// Generate a compatible Concourse output
+	if err := doOutput(res, encoder, logger); err != nil {
+		logger.Fatalf("Failed to encode to stdout: %s", err)
+		return
+	}
 }
 
 func Out(inputDir string, req OutRequest) (*OutResponse, error) {
-  if err := req.Params.Validate(); err != nil {
+	if err := req.Params.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid parameters: %s", err)
-  }
+	}
 
-  path := filepath.Join(inputDir, req.Params.Path)
+	path := filepath.Join(inputDir, req.Params.Path)
 
 	// Version available after a GET step.
 	var version Version
@@ -141,7 +141,7 @@ func Out(inputDir string, req OutRequest) (*OutResponse, error) {
 	}
 	if err := json.Unmarshal(content, &version); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal version from file: %s", err)
-  }
+	}
 
 	// Metadata available after a GET step.
 	var metadata Metadata
@@ -151,102 +151,102 @@ func Out(inputDir string, req OutRequest) (*OutResponse, error) {
 	}
 	if err := json.Unmarshal(content, &metadata); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata from file: %s", err)
-  }
-  
-  prNumber, err := metadata.Get("pr_id")
-  if err != nil {
-    return nil, err
-  }
+	}
 
-  prID, err := strconv.Atoi(prNumber)
-  if err != nil {
-    return nil, err
-  }
+	prNumber, err := metadata.Get("pr_id")
+	if err != nil {
+		return nil, err
+	}
 
-  client, err := api.NewGithubClient(
-    req.Source.Repository,
-    req.Source.AccessToken,
-    req.Source.SkipSSLVerification,
-    req.Source.GithubEndpoint,
-  )
-  if err != nil {
-    return nil, err
-  }
+	prID, err := strconv.Atoi(prNumber)
+	if err != nil {
+		return nil, err
+	}
 
-  // Update the state?
-  if req.Params.State != "" {
-    err = client.SetPullRequestState(prID, req.Params.State)
-    if err != nil {
-      return nil, err
-    }
-  }
+	client, err := api.NewGithubClient(
+		req.Source.Repository,
+		req.Source.AccessToken,
+		req.Source.SkipSSLVerification,
+		req.Source.GithubEndpoint,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-  // Delete the last comment?
-  if req.Params.DeleteLastComment {
-    err = client.DeleteLastPullRequestComment(prID)
-    if err != nil {
-      return nil, err
-    }
-  }
+	// Update the state?
+	if req.Params.State != "" {
+		err = client.SetPullRequestState(prID, req.Params.State)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-  // Add, remove or replace tags?
-  if len(req.Params.Labels) > 0 {
-    err = client.ReplacePullRequestLabels(prID, req.Params.Labels)
-    if err != nil {
-      return nil, err
-    }
-  } else {
-    if len(req.Params.AddLabels) > 0 {
-      err = client.AddPullRequestLabels(prID, req.Params.AddLabels)
-      if err != nil {
-        return nil, err
-      }
-    }
-    if len(req.Params.RemoveLabels) > 0 {
-      err = client.RemovePullRequestLabels(prID, req.Params.RemoveLabels)
-      if err != nil {
-        return nil, err
-      }
-    }
-  }
+	// Delete the last comment?
+	if req.Params.DeleteLastComment {
+		err = client.DeleteLastPullRequestComment(prID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-  // Add a new comment?
-  var comment string
-  if len(req.Params.Comment) > 0 {
-    comment = req.Params.Comment
-  } else if len(req.Params.CommentFile) > 0 {
-    b, err := ioutil.ReadFile(filepath.Join(path, req.Params.CommentFile))
-    if err != nil {
-      return nil, err
-    }
-    comment = string(b)
-  }
+	// Add, remove or replace tags?
+	if len(req.Params.Labels) > 0 {
+		err = client.ReplacePullRequestLabels(prID, req.Params.Labels)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if len(req.Params.AddLabels) > 0 {
+			err = client.AddPullRequestLabels(prID, req.Params.AddLabels)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(req.Params.RemoveLabels) > 0 {
+			err = client.RemovePullRequestLabels(prID, req.Params.RemoveLabels)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
-  if len(comment) > 0 {
-    err = client.CreatePullRequestComment(prID, safeExpandEnv(comment))
-    if err != nil {
-      return nil, err
-    }
-  }
+	// Add a new comment?
+	var comment string
+	if len(req.Params.Comment) > 0 {
+		comment = req.Params.Comment
+	} else if len(req.Params.CommentFile) > 0 {
+		b, err := ioutil.ReadFile(filepath.Join(path, req.Params.CommentFile))
+		if err != nil {
+			return nil, err
+		}
+		comment = string(b)
+	}
 
-  return &OutResponse{
-    Version:  version,
-    Metadata: metadata,
-  }, nil
+	if len(comment) > 0 {
+		err = client.CreatePullRequestComment(prID, safeExpandEnv(comment))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &OutResponse{
+		Version:  version,
+		Metadata: metadata,
+	}, nil
 }
 
 func safeExpandEnv(s string) string {
 	return os.Expand(s, func(v string) string {
 		switch v {
-    case "BUILD_ID",
-         "BUILD_NAME",
-         "BUILD_JOB_NAME",
-         "BUILD_PIPELINE_NAME",
-         "BUILD_TEAM_NAME",
-         "ATC_EXTERNAL_URL":
+		case "BUILD_ID",
+			"BUILD_NAME",
+			"BUILD_JOB_NAME",
+			"BUILD_PIPELINE_NAME",
+			"BUILD_TEAM_NAME",
+			"ATC_EXTERNAL_URL":
 			return os.Getenv(v)
-    }
-    
+		}
+
 		return "$" + v
 	})
 }

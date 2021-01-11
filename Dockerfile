@@ -32,7 +32,7 @@ ARG GOLANG_VERSION=1.15
 
 FROM golang:${GOLANG_VERSION} AS devenv
 
-ARG ORG=nderjung
+ARG ORG=nenaddev
 ARG REPO=concourse-github-pr-comment-resource
 
 RUN set -xe; \
@@ -46,7 +46,7 @@ FROM devenv AS build
 
 ARG GOOS=linux
 ARG GOARCH=amd64
-ARG ORG=nderjung
+ARG ORG=nenaddev
 ARG REPO=concourse-github-pr-comment-resource
 
 WORKDIR /go/src/github.com/${ORG}/${REPO}

@@ -166,17 +166,13 @@ func Check(req CheckRequest) (*CheckResponse, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not parse comment ID: %w", err)
 		}
-		lastComment, err := client.GetPullRequestComment(int64(id))
-		if err != nil {
-			return nil, fmt.Errorf("could not fetch last comment: %w", err)
-		}
 
 		// Append last version
-		versions = append(versions, Version{Ref: strconv.FormatInt(lastComment.GetID(), 10)})
+		versions = append(versions, Version{Ref: strconv.FormatInt(int64(id), 10)})
 		// fmt.Printf("Versioned comment: %s\n", lastComment.GetURL())
 		for _, c := range allComments {
 			// fmt.Printf("Checking comment: %s\n", c.GetURL())
-			if c.GetID() > lastComment.GetID() {
+			if c.GetID() > int64(id) {
 				// fmt.Printf("Adding comment: %s\n", c.GetURL())
 				versions = append(versions, Version{Ref: strconv.FormatInt(c.GetID(), 10)})
 			}

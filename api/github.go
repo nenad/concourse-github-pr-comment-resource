@@ -124,7 +124,7 @@ func (c *GithubClient) ListPullRequests() ([]*github.PullRequest, error) {
 		c.Repository,
 		&github.PullRequestListOptions{
 			// We want all states so we can sort through them later
-			State: "all",
+			State: "open",
 		},
 	)
 	if err != nil {
